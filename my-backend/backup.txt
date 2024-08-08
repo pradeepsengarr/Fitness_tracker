@@ -1,0 +1,88 @@
+const express = require('express');
+const mysql = require('mysql2');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// MySQL connection
+const db = mysql.createConnection({
+  host: 'localhost',
+  user: 'root',
+  password: '', // your MySQL password
+  database: 'fitness_tracker',
+});
+
+db.connect(err => {
+  if (err) {
+    console.error('Database connection failed:', err);
+  } else {
+    console.log('Connected to database');
+  }
+});
+
+// Routes
+
+// Register
+app.post('/signup', (req, res) => {
+  const { username, email, password } = req.body;
+
+  const hashedPassword = bcrypt.hashSync(password, 8);
+
+  const sql = 'INSERT INTO users (username, email, password) VALUES (?, ?, ?)';
+  db.query(sql, [username, email, hashedPassword], (err, result) => {
+    if (err) return res.status(500).send('Server error');
+    res.status(201).send('User registered');
+  });
+});
+
+// Login
+app.post('/login', (req, res) => {
+  const { email, password } = req.body;
+
+  const sql = 'SELECT * FROM users WHERE email = ?';
+  db.query(sql, [email], (err, result) => {
+    if (err) return res.status(500).send('Server error');
+    if (result.length === 0) return res.status(404).send('User not found');
+
+    const user = result[0];
+    const passwordIsValid = bcrypt.compareSync(password, user.password);
+    if (!passwordIsValid) return res.status(401).send('Invalid password');
+
+    const token = jwt.sign({ id: user.id }, 'your_secret_key', {
+      expiresIn: 86400, // 24 hours
+    });
+
+    res.status(200).send({ auth: true, token });
+  });
+});
+
+// Log Workout
+app.post('/log-workout', (req, res) => {
+  const { userId, date, exercises, duration, weight } = req.body;
+
+  const sql = 'INSERT INTO workouts (user_id, date, exercises, duration, weight) VALUES (?, ?, ?, ?, ?)';
+  db.query(sql, [userId, date, exercises, duration, weight], (err, result) => {
+    if (err) return res.status(500).send('Server error');
+    res.status(201).send('Workout logged');
+  });
+});
+
+// Log Nutrition
+app.post('/log-nutrition', (req, res) => {
+  const { userId, date, calories, proteins, fats, carbohydrates } = req.body;
+
+  const sql = 'INSERT INTO nutrition (user_id, date, calories, proteins, fats, carbohydrates) VALUES (?, ?, ?, ?, ?, ?)';
+  db.query(sql, [userId, date, calories, proteins, fats, carbohydrates], (err, result) => {
+    if (err) return res.status(500).send('Server error');
+    res.status(201).send('Nutrition logged');
+  });
+});
+
+// Start the server
+app.listen(5000, () => {
+  console.log('Server running on port 5000');
+});
